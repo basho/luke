@@ -53,7 +53,8 @@
 %%      first phase
 %% @spec add_inputs(pid(), any()) -> ok
 add_inputs(FlowPid, Inputs) ->
-    gen_fsm:sync_send_event(FlowPid, {inputs, Inputs}).
+    Timeout = get_timeout(FlowPid),
+    gen_fsm:sync_send_event(FlowPid, {inputs, Inputs}, Timeout).
 
 %% @doc Informs the phases all inputs are complete.
 %% @spec finish_inputs(pid()) -> ok
@@ -69,12 +70,17 @@ collect_output(FlowId, Timeout) ->
 %% @doc Cache value for the duration of the flow
 %% @spec cache_value(pid(), term(), term()) -> ok
 cache_value(FlowPid, Key, Value) ->
-    gen_fsm:sync_send_event(FlowPid, {cache_value, Key, Value}).
+    ok.
 
 %% @doc Check flow cache for entry
 %% @spec check_cache(pid(), term()) -> not_found | term()
 check_cache(FlowPid, Key) ->
-    gen_fsm:sync_send_event(FlowPid, {check_cache, Key}).
+    not_found.
+
+%% @doc Retrieve configured timeout for flow
+%% @spec get_timeout(pid()) -> integer()
+get_timeout(FlowPid) ->
+    gen_fsm:sync_send_event(FlowPid, get_timeout).
 
 %% @doc Returns the pids for each phase. Intended for
 %%      testing only
@@ -116,6 +122,8 @@ executing({results, PhaseId, Result0}, #state{client=Client, flow_id=FlowId, xfo
     Client ! {flow_results, PhaseId, FlowId, Result},
     {next_state, executing, State}.
 
+executing(get_timeout, _From, #state{flow_timeout=Timeout}=State) ->
+    {reply, Timeout, executing, State};
 executing({inputs, Inputs}, _From, #state{fsms=[H|_], flow_timeout=Timeout}=State) ->
     luke_phases:send_sync_inputs(H, Inputs, Timeout),
     {reply, ok, executing, State};
