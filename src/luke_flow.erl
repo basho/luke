@@ -69,12 +69,12 @@ collect_output(FlowId, Timeout) ->
 
 %% @doc Cache value for the duration of the flow
 %% @spec cache_value(pid(), term(), term()) -> ok
-cache_value(FlowPid, Key, Value) ->
+cache_value(_FlowPid, _Key, _Value) ->
     ok.
 
 %% @doc Check flow cache for entry
 %% @spec check_cache(pid(), term()) -> not_found | term()
-check_cache(FlowPid, Key) ->
+check_cache(_FlowPid, _Key) ->
     not_found.
 
 %% @doc Retrieve configured timeout for flow
