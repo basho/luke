@@ -44,13 +44,14 @@
                 flow_timeout,
                 tref,
                 xformer,
+                cache=orddict:new(),
                 results=[]}).
 
 %% @doc Add inputs to the flow. Inputs will be sent to the
 %%      first phase
 %% @spec add_inputs(pid(), any()) -> ok
 add_inputs(FlowPid, Inputs) ->
-    gen_fsm:send_event(FlowPid, {inputs, Inputs}).
+    gen_fsm:sync_send_event(FlowPid, {inputs, Inputs}).
 
 %% @doc Informs the phases all inputs are complete.
 %% @spec finish_inputs(pid()) -> ok
@@ -62,6 +63,16 @@ finish_inputs(FlowPid) ->
 %% @spec collect_output(any(), integer()) -> [any()] | {error, any()}
 collect_output(FlowId, Timeout) ->
     collect_output(FlowId, Timeout, dict:new()).
+
+%% @doc Cache value for the duration of the flow
+%% @spec cache_value(pid(), term(), term()) -> ok
+cache_value(FlowPid, Key, Value) ->
+    gen_fsm:sync_send_event(FlowPid, {cache_value, Key, Value}).
+
+%% @doc Check flow cache for entry
+%% @spec check_cache(pid(), term()) -> not_found | term()
+check_cache(FlowPid, Key) ->
+    gen_fsm:sync_send_event(FlowPid, {check_cache, Key}).
 
 %% @doc Returns the pids for each phase. Intended for
 %%      testing only
@@ -89,9 +100,6 @@ init([Client, FlowId, FlowDesc, FlowTransformer, Timeout]) ->
             {stop, Error}
     end.
 
-executing({inputs, Inputs}, #state{fsms=[H|_]}=State) ->
-    luke_phases:send_inputs(H, Inputs),
-    {next_state, executing, State};
 executing(inputs_done, #state{fsms=[H|_]}=State) ->
     luke_phases:send_inputs_done(H),
     {next_state, executing, State};
@@ -106,6 +114,21 @@ executing({results, PhaseId, Result0}, #state{client=Client, flow_id=FlowId, xfo
     Client ! {flow_results, PhaseId, FlowId, Result},
     {next_state, executing, State}.
 
+executing({inputs, Inputs}, _From, #state{fsms=[H|_], flow_timeout=Timeout}=State) ->
+    luke_phases:send_sync_inputs(H, Inputs, Timeout),
+    {reply, ok, executing, State};
+
+executing({cache_value, Key, Value}, _From, #state{cache=Cache0}=State) ->
+    Cache = orddict:store(Key, Value, Cache0),
+    {reply, ok, executing, State#state{cache=Cache}};
+executing({check_cache, Key}, _From, #state{cache=Cache}=State) ->
+    Reply = case orddict:is_key(Key, Cache) of
+                false ->
+                    not_found;
+                true ->
+                    oddict:fetch(Key, Cache)
+            end,
+    {reply, Reply, executing, State};
 executing(get_phases, _From, #state{fsms=FSMs}=State) ->
     {reply, FSMs, executing, State}.
 
@@ -115,8 +138,9 @@ handle_event(_Event, StateName, State) ->
 handle_sync_event(_Event, _From, StateName, State) ->
     {reply, ignored, StateName, State}.
 
-handle_info(flow_timeout, _StateName, State) ->
-    {stop, flow_timeout, State};
+handle_info(flow_timeout, _StateName, #state{flow_id=FlowId, client=Client}=State) ->
+    Client ! {flow_error, FlowId, {error, timeout}},
+    {stop, normal, State};
 handle_info({'EXIT', _Pid, normal}, StateName, State) ->
     {next_state, StateName, State};
 handle_info({'EXIT', _Pid, Reason}, _StateName, #state{flow_id=FlowId, client=Client}=State) ->

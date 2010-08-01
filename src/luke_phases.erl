@@ -24,6 +24,7 @@
 -module(luke_phases).
 
 -export([send_inputs/2,
+         send_sync_inputs/3,
          send_inputs_done/1,
          send_flow_complete/1]).
 -export([send_flow_results/3]).
@@ -38,6 +39,17 @@ send_inputs(PhasePids, Inputs) when is_list(PhasePids) ->
     T ++ [H];
 send_inputs(PhasePid, Inputs) when is_pid(PhasePid) ->
     gen_fsm:send_event(PhasePid, {inputs, Inputs}).
+
+%% @doc Sends inputs to a phase process
+%%      NOTE: This call blocks
+%% @spec send_sync_inputs(pid() | [pid()], any(), integer()) -> ok | timeout
+send_sync_inputs(PhasePids, Inputs, Timeout) when is_list(PhasePids) ->
+    [H|T] = PhasePids,
+    send_sync_inputs(H, Inputs, Timeout),
+    T ++ [H];
+send_sync_inputs(PhasePid, Inputs, Timeout) when is_pid(PhasePid) ->
+    gen_fsm:sync_send_event(PhasePid, {inputs, Inputs}, Timeout).
+
 
 %% @doc Signals completion of inputs to a phase
 %%      or a list of phases.
