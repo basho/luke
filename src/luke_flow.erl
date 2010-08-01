@@ -23,7 +23,9 @@
 -export([start_link/5,
          add_inputs/2,
          finish_inputs/1,
-         collect_output/2]).
+         collect_output/2,
+         check_cache/2,
+         cache_value/3]).
 
 %% FSM states
 -export([get_phases/1,
@@ -126,7 +128,7 @@ executing({check_cache, Key}, _From, #state{cache=Cache}=State) ->
                 false ->
                     not_found;
                 true ->
-                    oddict:fetch(Key, Cache)
+                    orddict:fetch(Key, Cache)
             end,
     {reply, Reply, executing, State};
 executing(get_phases, _From, #state{fsms=FSMs}=State) ->
