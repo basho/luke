@@ -12,11 +12,10 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
--module(test_suite).
+-module(luke_suite).
 
 -include_lib("eunit/include/eunit.hrl").
 
 all_test_() ->
-    [{module, lifecycle_tests},
-     {module, results_tests},
+    [{module, results_tests},
      {module, cache_tests}].

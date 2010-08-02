@@ -19,6 +19,7 @@
 -export([start_flow/1, verify_phases/2, verify_results/2, assertDead/1]).
 
 start_flow(FlowDesc) ->
+    start_deps([sasl, luke]),
     FlowId = make_ref(),
     {ok, Pid} = luke:new_flow(FlowId, FlowDesc),
     Phases = test_util:verify_phases(Pid, length(FlowDesc)),
@@ -70,3 +71,16 @@ assertDead0([H|T]) when is_list(H) ->
 assertDead0([H|T]) when is_pid(H) ->
     ?assertMatch(false, erlang:is_process_alive(H)),
     assertDead0(T).
+
+start_deps([]) ->
+    ok;
+start_deps([H|T]) ->
+    case application:start(H) of
+        ok ->
+            timer:sleep(50),
+            start_deps(T);
+        {error, {already_started, H}} ->
+            start_deps(T);
+        Error ->
+            throw(Error)
+    end.
