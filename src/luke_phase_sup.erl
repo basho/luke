@@ -20,14 +20,15 @@
 
 %% API
 -export([start_link/0,
-         new_phase/7]).
+         new_phase/8]).
 
 %% Supervisor callbacks
 -export([init/1]).
 
-new_phase(Id, PhaseMod, Behavior, NextPhases, Flow, Timeout, PhaseArgs) when is_atom(PhaseMod),
-                                                                             is_list(PhaseArgs) ->
-    start_child(PhaseMod, [Id, Behavior, NextPhases, Flow, Timeout, PhaseArgs]).
+new_phase(Id, PhaseMod, Behavior, NextPhases, Flow, CachePid,
+          Timeout, PhaseArgs) when is_atom(PhaseMod),
+                                   is_list(PhaseArgs) ->
+    start_child(PhaseMod, [Id, Behavior, NextPhases, Flow, CachePid, Timeout, PhaseArgs]).
 
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).

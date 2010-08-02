@@ -23,9 +23,7 @@
 -export([start_link/5,
          add_inputs/2,
          finish_inputs/1,
-         collect_output/2,
-         check_cache/2,
-         cache_value/3]).
+         collect_output/2]).
 
 %% FSM states
 -export([get_phases/1,
@@ -67,16 +65,6 @@ finish_inputs(FlowPid) ->
 collect_output(FlowId, Timeout) ->
     collect_output(FlowId, Timeout, dict:new()).
 
-%% @doc Cache value for the duration of the flow
-%% @spec cache_value(pid(), term(), term()) -> ok
-cache_value(_FlowPid, _Key, _Value) ->
-    ok.
-
-%% @doc Check flow cache for entry
-%% @spec check_cache(pid(), term()) -> not_found | term()
-check_cache(_FlowPid, _Key) ->
-    not_found.
-
 %% @doc Retrieve configured timeout for flow
 %% @spec get_timeout(pid()) -> integer()
 get_timeout(FlowPid) ->
@@ -94,6 +82,7 @@ start_link(Client, FlowId, FlowDesc, FlowTransformer, Timeout) when is_list(Flow
 
 init([Client, FlowId, FlowDesc, FlowTransformer, Timeout]) ->
     process_flag(trap_exit, true),
+    {ok, CachePid} = luke_flow_cache:start_link(),
     Tref = case Timeout of
                infinity ->
                    undefined;
@@ -101,7 +90,7 @@ init([Client, FlowId, FlowDesc, FlowTransformer, Timeout]) ->
                    {ok, T} = timer:send_after(Timeout, flow_timeout),
                    T
            end,
-    case start_phases(FlowDesc, Timeout) of
+    case start_phases(FlowDesc, CachePid, Timeout) of
         {ok, FSMs} ->
             {ok, executing, #state{fsms=FSMs, flow_id=FlowId, flow_timeout=Timeout, client=Client, xformer=FlowTransformer, tref=Tref}};
         Error ->
@@ -167,25 +156,27 @@ code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
 
 %% Internal functions
-start_phases(FlowDesc, Timeout) ->
-    start_phases(lists:reverse(FlowDesc), length(FlowDesc) - 1, Timeout, []).
+start_phases(FlowDesc, CachePid, Timeout) ->
+    start_phases(lists:reverse(FlowDesc), length(FlowDesc) - 1, CachePid, Timeout, []).
 
-start_phases([], _Id, _Timeout, Accum) ->
+start_phases([], _Id, _CachePid, _Timeout, Accum) ->
     {ok, Accum};
-start_phases([{PhaseMod, Behaviors, Args}|T], Id, Timeout, Accum) ->
+start_phases([{PhaseMod, Behaviors, Args}|T], Id, CachePid, Timeout, Accum) ->
     NextFSM = next_fsm(Accum),
     case proplists:get_value(converge, Behaviors) of
         undefined ->
-            case luke_phase_sup:new_phase(Id, PhaseMod, Behaviors, NextFSM, self(), Timeout, Args) of
+            case luke_phase_sup:new_phase(Id, PhaseMod, Behaviors, NextFSM, self(),
+                                          CachePid, Timeout, Args) of
                 {ok, Pid} ->
                     erlang:link(Pid),
-                    start_phases(T, Id - 1, Timeout, [Pid|Accum]);
+                    start_phases(T, Id - 1, CachePid, Timeout, [Pid|Accum]);
                 Error ->
                     Error
             end;
         InstanceCount ->
-            Pids = start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, self(), Timeout, Args, InstanceCount),
-            start_phases(T, Id - 1, Timeout, [Pids|Accum])
+            Pids = start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, self(), CachePid,
+                                           Timeout, Args, InstanceCount),
+            start_phases(T, Id - 1, CachePid, Timeout, [Pids|Accum])
     end.
 
 collect_output(FlowId, Timeout, Accum) ->
@@ -218,20 +209,26 @@ next_fsm(Accum) ->
          end
  end.
 
-start_converging_phases(Id, PhaseMod, Behaviors0, NextFSM, Flow, Timeout, Args, Count) ->
+start_converging_phases(Id, PhaseMod, Behaviors0, NextFSM, Flow, CachePid,
+                        Timeout, Args, Count) ->
     Behaviors = [normalize_behavior(B) || B <- Behaviors0],
-    Pids = start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, Flow, Timeout, Args, Count, []),
+    Pids = start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, Flow, CachePid,
+                                   Timeout, Args, Count, []),
     [Leader|_] = Pids,
     lists:foreach(fun(P) -> luke_phase:partners(P, Leader, Pids) end, Pids),
     Pids.
 
-start_converging_phases(_Id, _PhaseMod, _Behaviors, _NextFSM, _Flow, _Timeout, _Args, 0, Accum) ->
+start_converging_phases(_Id, _PhaseMod, _Behaviors, _NextFSM, _Flow, _CachePid,
+                        _Timeout, _Args, 0, Accum) ->
     Accum;
-start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, Flow, Timeout, Args, Count, Accum) ->
-    case luke_phase_sup:new_phase(Id, PhaseMod, Behaviors, NextFSM, Flow, Timeout, Args) of
+start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, Flow, CachePid,
+                        Timeout, Args, Count, Accum) ->
+    case luke_phase_sup:new_phase(Id, PhaseMod, Behaviors, NextFSM, Flow, CachePid,
+                                  Timeout, Args) of
         {ok, Pid} ->
             erlang:link(Pid),
-            start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, Flow, Timeout, Args, Count - 1, [Pid|Accum]);
+            start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, Flow, CachePid,
+                                    Timeout, Args, Count - 1, [Pid|Accum]);
         Error ->
             throw(Error)
     end.

@@ -18,4 +18,5 @@
 
 all_test_() ->
     [{module, lifecycle_tests},
-     {module, results_tests}].
+     {module, results_tests},
+     {module, cache_tests}].
