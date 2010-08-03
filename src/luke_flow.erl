@@ -82,7 +82,6 @@ start_link(Client, FlowId, FlowDesc, FlowTransformer, Timeout) when is_list(Flow
 
 init([Client, FlowId, FlowDesc, FlowTransformer, Timeout]) ->
     process_flag(trap_exit, true),
-    {ok, CachePid} = luke_flow_cache:start_link(),
     Tref = case Timeout of
                infinity ->
                    undefined;
@@ -90,7 +89,7 @@ init([Client, FlowId, FlowDesc, FlowTransformer, Timeout]) ->
                    {ok, T} = timer:send_after(Timeout, flow_timeout),
                    T
            end,
-    case start_phases(FlowDesc, CachePid, Timeout) of
+    case start_phases(FlowDesc, Timeout) of
         {ok, FSMs} ->
             {ok, executing, #state{fsms=FSMs, flow_id=FlowId, flow_timeout=Timeout, client=Client, xformer=FlowTransformer, tref=Tref}};
         Error ->
@@ -156,27 +155,27 @@ code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
 
 %% Internal functions
-start_phases(FlowDesc, CachePid, Timeout) ->
-    start_phases(lists:reverse(FlowDesc), length(FlowDesc) - 1, CachePid, Timeout, []).
+start_phases(FlowDesc, Timeout) ->
+    start_phases(lists:reverse(FlowDesc), length(FlowDesc) - 1, Timeout, []).
 
-start_phases([], _Id, _CachePid, _Timeout, Accum) ->
+start_phases([], _Id, _Timeout, Accum) ->
     {ok, Accum};
-start_phases([{PhaseMod, Behaviors, Args}|T], Id, CachePid, Timeout, Accum) ->
+start_phases([{PhaseMod, Behaviors, Args}|T], Id, Timeout, Accum) ->
     NextFSM = next_fsm(Accum),
     case proplists:get_value(converge, Behaviors) of
         undefined ->
             case luke_phase_sup:new_phase(Id, PhaseMod, Behaviors, NextFSM, self(),
-                                          CachePid, Timeout, Args) of
+                                          Timeout, Args) of
                 {ok, Pid} ->
                     erlang:link(Pid),
-                    start_phases(T, Id - 1, CachePid, Timeout, [Pid|Accum]);
+                    start_phases(T, Id - 1, Timeout, [Pid|Accum]);
                 Error ->
                     Error
             end;
         InstanceCount ->
-            Pids = start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, self(), CachePid,
+            Pids = start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, self(),
                                            Timeout, Args, InstanceCount),
-            start_phases(T, Id - 1, CachePid, Timeout, [Pids|Accum])
+            start_phases(T, Id - 1, Timeout, [Pids|Accum])
     end.
 
 collect_output(FlowId, Timeout, Accum) ->
@@ -209,25 +208,25 @@ next_fsm(Accum) ->
          end
  end.
 
-start_converging_phases(Id, PhaseMod, Behaviors0, NextFSM, Flow, CachePid,
+start_converging_phases(Id, PhaseMod, Behaviors0, NextFSM, Flow,
                         Timeout, Args, Count) ->
     Behaviors = [normalize_behavior(B) || B <- Behaviors0],
-    Pids = start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, Flow, CachePid,
+    Pids = start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, Flow,
                                    Timeout, Args, Count, []),
     [Leader|_] = Pids,
     lists:foreach(fun(P) -> luke_phase:partners(P, Leader, Pids) end, Pids),
     Pids.
 
-start_converging_phases(_Id, _PhaseMod, _Behaviors, _NextFSM, _Flow, _CachePid,
+start_converging_phases(_Id, _PhaseMod, _Behaviors, _NextFSM, _Flow,
                         _Timeout, _Args, 0, Accum) ->
     Accum;
-start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, Flow, CachePid,
+start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, Flow,
                         Timeout, Args, Count, Accum) ->
-    case luke_phase_sup:new_phase(Id, PhaseMod, Behaviors, NextFSM, Flow, CachePid,
+    case luke_phase_sup:new_phase(Id, PhaseMod, Behaviors, NextFSM, Flow,
                                   Timeout, Args) of
         {ok, Pid} ->
             erlang:link(Pid),
-            start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, Flow, CachePid,
+            start_converging_phases(Id, PhaseMod, Behaviors, NextFSM, Flow,
                                     Timeout, Args, Count - 1, [Pid|Accum]);
         Error ->
             throw(Error)

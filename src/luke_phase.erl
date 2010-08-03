@@ -21,11 +21,9 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% API
--export([start_link/8,
+-export([start_link/7,
          complete/0,
-         partners/3,
-         cache_value/2,
-         check_cache/1]).
+         partners/3]).
 
 %% Behaviour
 -export([behaviour_info/1]).
@@ -65,9 +63,8 @@ behaviour_info(callbacks) ->
 behaviour_info(_) ->
     undefined.
 
-start_link(PhaseMod, Id, Behaviors, NextPhases, Flow, CachePid,
-           Timeout, PhaseArgs) ->
-    gen_fsm:start_link(?MODULE, [Id, PhaseMod, Behaviors, NextPhases, Flow, CachePid,
+start_link(PhaseMod, Id, Behaviors, NextPhases, Flow, Timeout, PhaseArgs) ->
+    gen_fsm:start_link(?MODULE, [Id, PhaseMod, Behaviors, NextPhases, Flow,
                                  Timeout, PhaseArgs], []).
 
 complete() ->
@@ -76,24 +73,7 @@ complete() ->
 partners(PhasePid, Leader, Partners) ->
     gen_fsm:send_event(PhasePid, {partners, Leader, Partners}).
 
-cache_value(Key, Value) ->
-    case erlang:get(flow_cache_pid) of
-        undefined ->
-            ok;
-        CachePid ->
-            luke_flow_cache:cache_value(CachePid, Key, Value)
-    end.
-
-check_cache(Key) ->
-    case erlang:get(flow_cache_pid) of
-        undefined ->
-            not_found;
-        CachePid ->
-            luke_flow_cache:check_cache(CachePid, Key)
-    end.
-
-init([Id, PhaseMod, Behaviors, NextPhases, Flow, CachePid, Timeout, PhaseArgs]) ->
-    erlang:put(flow_cache_pid, CachePid),
+init([Id, PhaseMod, Behaviors, NextPhases, Flow, Timeout, PhaseArgs]) ->
     case PhaseMod:init(PhaseArgs) of
         {ok, ModState} ->
             Accumulate = lists:member(accumulate, Behaviors),
