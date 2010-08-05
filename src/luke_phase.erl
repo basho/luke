@@ -167,7 +167,7 @@ handle_callback(Type, {no_output, NewModState, PhaseTimeout},
         async ->
             {next_state, executing, State1, PhaseTimeout};
         sync ->
-            {reply, ok, executin, State1, PhaseTimeout}
+            {reply, ok, executing, State1, PhaseTimeout}
     end;
 handle_callback(Type, {output, Output, NewModState}, State) ->
     State1 = route_output(Output, State),
