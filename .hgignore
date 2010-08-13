@@ -1,0 +1,2 @@
+ebin/.*\.beam
+tests_ebin/.*\.beam
