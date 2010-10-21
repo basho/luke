@@ -17,7 +17,7 @@
 -behaviour(luke_phase).
 
 -export([init/1, handle_input/3, handle_input_done/1, handle_event/2,
-         handle_timeout/1, handle_info/2, terminate/2]).
+         handle_sync_event/3, handle_timeout/1, handle_info/2, terminate/2]).
 
 -record(state, {inputs=[]}).
 
@@ -33,6 +33,9 @@ handle_input_done(State) ->
 
 handle_event(_Event, State) ->
     {no_output, State}.
+
+handle_sync_event(_Event, _From, State) ->
+    {reply, ignored, State}.
 
 handle_timeout(State) ->
     {no_output, State}.

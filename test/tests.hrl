@@ -32,3 +32,5 @@
 
 -define(MAPRED_EMPTY, [{map_phase, [], []},
                        {reduce_phase, [{converge, 1}], []}]).
+
+-define(SYNC_FLOW, [{sync_phase, [], []}]).

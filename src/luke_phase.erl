@@ -57,6 +57,7 @@ behaviour_info(callbacks) ->
    {handle_timeout, 1},
    {handle_input, 3},
    {handle_input_done, 1},
+   {handle_sync_event, 3},
    {handle_event, 2},
    {handle_info, 2},
    {terminate, 2}];
@@ -130,14 +131,27 @@ executing(timeout, State) ->
 executing(Event, #state{mod=PhaseMod, modstate=ModState}=State) ->
     handle_callback(async, PhaseMod:handle_event(Event, ModState), State).
 
+
 executing({inputs, Input}, _From, #state{mod=PhaseMod, modstate=ModState, flow_timeout=Timeout}=State) ->
-    handle_callback(sync, PhaseMod:handle_input(Input, ModState, Timeout), State).
+    handle_callback(sync, PhaseMod:handle_input(Input, ModState, Timeout), State);
+executing(Event, From, #state{mod=PhaseMod, modstate=ModState}=State) ->
+    case PhaseMod:handle_sync_event(Event, From, ModState) of
+        {reply, Reply, NewModState} ->
+            {reply, Reply, executing, State#state{modstate=NewModState}};
+        {noreply, NewModState} ->
+            {next_state, executing, State#state{modstate=NewModState}};
+        {stop, Reason, Reply, NewModState} ->
+            {stop, Reason, Reply, State#state{modstate=NewModState}};
+        {stop, Reason, NewModState} ->
+            {stop, Reason, State#state{modstate=NewModState}}
+    end.
 
 handle_event(_Event, StateName, State) ->
     {next_state, StateName, State}.
 
 handle_sync_event(_Event, _From, StateName, State) ->
     {reply, ignored, StateName, State}.
+
 handle_info(timeout, executing, #state{mod=Mod, modstate=ModState}=State) ->
     handle_callback(async, Mod:handle_timeout(ModState), State);
 handle_info(Info, _StateName, #state{mod=PhaseMod, modstate=ModState}=State) ->

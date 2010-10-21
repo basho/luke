@@ -86,6 +86,10 @@ all_test_() ->
              test_util:verify_results(FlowId, none),
              test_util:assertDead([Pid|Phases]) end,
      fun() ->
+             {_FlowId, Pid, [Phase]} = test_util:start_flow(?SYNC_FLOW),
+             ?assertMatch(pong, gen_fsm:sync_send_event(Phase, ping)),
+             luke_flow:finish_inputs(Pid) end,
+     fun() ->
              {FlowId, Pid, Phases} = test_util:start_flow(?MAPRED_EMPTY),
              luke_flow:add_inputs(Pid, [a,b]),
              luke_flow:add_inputs(Pid, [a,b]),
