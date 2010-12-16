@@ -243,4 +243,4 @@ route_output(Output, #state{id=Id, converge=false, accumulate=Accumulate, flow=F
 propagate_inputs(undefined, _Results) ->
     undefined;
 propagate_inputs(Next, Results) ->
-    luke_phases:send_inputs(Next, Results).
+    luke_phases:send_sync_inputs(Next, Results, infinity).
