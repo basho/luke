@@ -18,8 +18,6 @@
 
 -behaviour(gen_fsm).
 
--include_lib("eunit/include/eunit.hrl").
-
 -define(BUFFER_INPUT_CHECK, 1000).
 -define(MAX_BUFFERED_INPUTS, 500).
 
