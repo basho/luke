@@ -5,9 +5,9 @@
    to extract common behaviors in Riak's MapReduce engine.
 
 ** Quick Start
-   You must have [[http://erlang.org/download.html][Erlang/OTP R13]] or later to build Luke. A sane
-   GNU-style build system is required if you want to use =make= to
-   build the project.
+   You must have [[http://erlang.org/download.html][Erlang/OTP R13]]
+   or later to build Luke. A sane GNU-style build system is required
+   if you want to use =make= to build the project.
 
 #+BEGIN_SRC shell
 git clone git://github.com/basho/luke.git
