@@ -7,6 +7,6 @@ clean:
 
 test: all
 	./rebar eunit
-#docs: all
-#	@mkdir -p docs
-#	@./build_docs.sh
+
+docs: 
+	./rebar doc
