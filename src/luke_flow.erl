@@ -138,12 +138,12 @@ handle_sync_event(_Event, _From, StateName, State) ->
 
 handle_info(flow_timeout, _StateName, #state{flow_id=FlowId, client=Client}=State) ->
     Client ! {flow_error, FlowId, {error, timeout}},
-    {stop, normal, State};
+    {stop, {error, flow_timeout}, State};
 handle_info({'EXIT', _Pid, normal}, StateName, State) ->
     {next_state, StateName, State};
 handle_info({'EXIT', _Pid, Reason}, _StateName, #state{flow_id=FlowId, client=Client}=State) ->
     Client ! {flow_error, FlowId, Reason},
-    {stop, normal, State};
+    {stop, {error, {phase_error, Reason}}, State};
 handle_info(_Info, StateName, State) ->
     {next_state, StateName, State}.
 
